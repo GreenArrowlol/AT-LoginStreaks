@@ -1,0 +1,182 @@
+# How often to check if a player's streak should reset (in hours)
+# Default: 24 hours = 1 day
+check-interval-hours: 24
+
+# All plugin messages sent to players
+messages:
+  on-time: '&aYou''ve joined right on time! Here''s your rewards:'
+  missed-streak: '&cYou missed the streak, the streak has been restarted.'
+  time-remaining: '&e%hours% hours and %minutes% minutes remaining for next streak!'
+  reward-claimed: '&aStreak Day %days% rewards claimed!'
+  admin-test: '&aGave %player% day %days% rewards for testing.'
+  admin-reset: '&aReset %player%''s streak.'
+  admin-check: '&e%player% is on day %days% of their login streak.'
+
+# Define different reward tiers based on permissions
+# Higher weight = higher priority (if player has multiple permissions)
+reward-tiers:
+  
+  # Default tier for all players (no permission required)
+  default:
+    weight: 0
+    permission: ''
+    days:
+      # The day number (1 = first day of streak)
+      '1':
+        # Whether to reset the player's streak back to day 1 after claiming this reward
+        reset: false
+        # List of rewards to give for this day
+        rewards:
+          # Reward type: MESSAGE - sends a message to the player
+          - type: MESSAGE
+            # The message content (supports color codes with &)
+            value: '&aWelcome back! Day 1 reward!'
+          # Reward type: VAULT_MONEY - gives money (requires Vault + economy plugin)
+          - type: VAULT_MONEY
+            # Amount of money to give
+            value: '100'
+          # Reward type: CONSOLE_COMMAND - runs a command from console
+          - type: CONSOLE_COMMAND
+            # The command to run (%player% is replaced with player name)
+            value: 'give %player% diamond 1'
+      # Day 2 rewards
+      '2':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&aDay 2! Keep it up!'
+          - type: VAULT_MONEY
+            value: '200'
+      
+      # Day range: applies the same rewards to days 3, 4, and 5
+      '3-5':
+        reset: false
+        rewards:
+          # %days% placeholder shows the current day number
+          - type: MESSAGE
+            value: '&aDay %days%! You''re doing great!'
+          - type: VAULT_MONEY
+            value: '300'
+          # Reward type: ITEM - gives a custom item
+          - type: ITEM
+            # The material type of the item
+            material: DIAMOND_SWORD
+            # How many items to give
+            amount: 1
+            # Custom display name (supports color codes)
+            name: '&bStreak Sword'
+            # Custom lore lines (list of strings)
+            lore:
+              - '&7Awarded for %days% day streak'
+              - '&7Keep logging in!'
+            # Enchantments in format 'ENCHANTMENT_NAME:LEVEL'
+            enchantments:
+              - 'SHARPNESS:5'
+              - 'UNBREAKING:3'
+      # Day 7 (one week)
+      '7':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&6&lWEEK STREAK! Amazing!'
+          - type: VAULT_MONEY
+            value: '1000'
+          # Reward type: PLAYER_COMMAND - runs command as the player (not console)
+          - type: PLAYER_COMMAND
+            # Command the player will execute
+            value: 'warp special'
+      # Day 14 (two weeks)
+      '14':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&5&l2 WEEKS! Incredible dedication!'
+          - type: VAULT_MONEY
+            value: '5000'
+      # Day 30 (one month) - resets after claiming
+      '30':
+        # Set to true to reset streak back to day 1 after claiming this reward
+        reset: true
+        rewards:
+          - type: MESSAGE
+            value: '&c&lMONTH COMPLETE! Resetting to Day 1.'
+          - type: VAULT_MONEY
+            value: '10000'
+          - type: CONSOLE_COMMAND
+            value: 'crate givekey %player% monthly 1'
+  
+  # VIP tier (requires rank.vip permission)
+  vip:
+    # Priority weight (higher = more priority if player has multiple tier permissions)
+    weight: 1
+    # Permission required for this tier (empty string = no permission needed)
+    permission: 'rank.vip'
+    # Days configuration (same structure as default tier)
+    days:
+      '1':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&aVIP Day 1! Extra rewards!'
+          - type: VAULT_MONEY
+            value: '200'
+          - type: CONSOLE_COMMAND
+            value: 'give %player% diamond 2'
+      '7':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&6&lVIP WEEK STREAK!'
+          - type: VAULT_MONEY
+            value: '2000'
+          # Custom player head with texture
+          - type: ITEM
+            # PLAYER_HEAD material for skull items
+            material: PLAYER_HEAD
+            amount: 1
+            name: '&6VIP Trophy'
+            lore:
+              - '&7VIP Week Streak Reward'
+            # Base64 texture value for custom skull appearance
+            skull_texture: 'eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzVjOWNjY2Y2MWE2ZTYyODRmZTliYmU2NDkxNTViZTRkOTc5OTI0YjI2OTJjNmRiNWNhNDdhNmI5M2EifX19'
+  
+  # MVP tier (requires rank.mvp permission)
+  mvp:
+    # Highest priority tier
+    weight: 2
+    permission: 'rank.mvp'
+    days:
+      '1':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&b&lMVP Day 1! Premium rewards!'
+          - type: VAULT_MONEY
+            value: '500'
+          - type: CONSOLE_COMMAND
+            value: 'give %player% diamond 5'
+      '3-5':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&b&lMVP Day %days%! You''re unstoppable!'
+          - type: VAULT_MONEY
+            value: '750'
+      '7':
+        reset: false
+        rewards:
+          - type: MESSAGE
+            value: '&d&lMVP WEEK STREAK! Legendary!'
+          - type: VAULT_MONEY
+            value: '3000'
+          - type: ITEM
+            material: DIAMOND_CHESTPLATE
+            amount: 1
+            name: '&d&lMVP Chestplate'
+            lore:
+              - '&7Exclusive MVP Reward'
+              - '&7Week %days% achieved'
+            enchantments:
+              - 'PROTECTION:4'
+              - 'UNBREAKING:3'
+              - 'MENDING:1'

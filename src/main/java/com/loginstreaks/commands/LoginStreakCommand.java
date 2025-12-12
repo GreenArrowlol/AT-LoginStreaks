@@ -111,7 +111,8 @@ public class LoginStreakCommand implements CommandExecutor {
             plugin.getRewardManager().giveRewards(target, day);
             
             String message = plugin.getConfig().getString("messages.admin-test", "&aGave rewards.");
-            message = message.replace("%player%", target.getName())
+            message = replacePlaceholders(message)
+                            .replace("%player%", target.getName())
                             .replace("%days%", String.valueOf(day));
             sender.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
         } catch (NumberFormatException e) {
@@ -134,7 +135,7 @@ public class LoginStreakCommand implements CommandExecutor {
         plugin.getDataManager().setPlayerData(target.getUniqueId(), data);
         
         String message = plugin.getConfig().getString("messages.admin-reset", "&aReset streak.");
-        message = message.replace("%player%", target.getName());
+        message = replacePlaceholders(message).replace("%player%", target.getName());
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
     }
     
@@ -149,7 +150,8 @@ public class LoginStreakCommand implements CommandExecutor {
         PlayerData data = plugin.getDataManager().getPlayerData(target.getUniqueId());
         
         String message = plugin.getConfig().getString("messages.admin-check", "&ePlayer streak info.");
-        message = message.replace("%player%", target.getName())
+        message = replacePlaceholders(message)
+                        .replace("%player%", target.getName())
                         .replace("%days%", String.valueOf(data.getCurrentStreak()));
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
         
@@ -161,5 +163,10 @@ public class LoginStreakCommand implements CommandExecutor {
         } else {
             sender.sendMessage(ChatColor.YELLOW + "Next claim: Available now");
         }
+    }
+    
+    private String replacePlaceholders(String message) {
+        String prefix = plugin.getConfig().getString("prefix", "");
+        return message.replace("%prefix%", prefix);
     }
 }

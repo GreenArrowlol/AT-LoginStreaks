@@ -48,13 +48,13 @@ public class PlayerJoinListener implements Listener {
         data.setNextClaimTime(now + checkInterval);
         
         String message = plugin.getConfig().getString("messages.on-time", "&aWelcome! Here's your first reward!");
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        player.sendMessage(ChatColor.translateAlternateColorCodes('&', replacePlaceholders(message)));
         
         plugin.getRewardManager().giveRewards(player, 1);
         
         String claimed = plugin.getConfig().getString("messages.reward-claimed", "&aRewards claimed!");
         player.sendMessage(ChatColor.translateAlternateColorCodes('&', 
-            claimed.replace("%days%", "1")));
+            replacePlaceholders(claimed).replace("%days%", "1")));
     }
     
     private void handleOnTimeJoin(Player player, PlayerData data, long now, long checkInterval) {
@@ -64,13 +64,13 @@ public class PlayerJoinListener implements Listener {
         data.setNextClaimTime(now + checkInterval);
         
         String message = plugin.getConfig().getString("messages.on-time", "&aYou've joined right on time! Here's your rewards:");
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        player.sendMessage(ChatColor.translateAlternateColorCodes('&', replacePlaceholders(message)));
         
         plugin.getRewardManager().giveRewards(player, newStreak);
         
         String claimed = plugin.getConfig().getString("messages.reward-claimed", "&aRewards claimed!");
         player.sendMessage(ChatColor.translateAlternateColorCodes('&', 
-            claimed.replace("%days%", String.valueOf(newStreak))));
+            replacePlaceholders(claimed).replace("%days%", String.valueOf(newStreak))));
         
         if (plugin.getRewardManager().shouldReset(player, newStreak)) {
             data.setCurrentStreak(0);
@@ -83,13 +83,13 @@ public class PlayerJoinListener implements Listener {
         data.setNextClaimTime(now + checkInterval);
         
         String message = plugin.getConfig().getString("messages.missed-streak", "&cYou missed the streak, the streak has been restarted.");
-        player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        player.sendMessage(ChatColor.translateAlternateColorCodes('&', replacePlaceholders(message)));
         
         plugin.getRewardManager().giveRewards(player, 1);
         
         String claimed = plugin.getConfig().getString("messages.reward-claimed", "&aRewards claimed!");
         player.sendMessage(ChatColor.translateAlternateColorCodes('&', 
-            claimed.replace("%days%", "1")));
+            replacePlaceholders(claimed).replace("%days%", "1")));
     }
     
     private void handleTooEarly(Player player, PlayerData data) {
@@ -98,8 +98,14 @@ public class PlayerJoinListener implements Listener {
         long minutes = (remaining / (1000 * 60)) % 60;
         
         String message = plugin.getConfig().getString("messages.time-remaining", "&e%hours% hours and %minutes% minutes remaining for next streak!");
-        message = message.replace("%hours%", String.valueOf(hours))
+        message = replacePlaceholders(message)
+                        .replace("%hours%", String.valueOf(hours))
                         .replace("%minutes%", String.valueOf(minutes));
         player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+    }
+    
+    private String replacePlaceholders(String message) {
+        String prefix = plugin.getConfig().getString("prefix", "");
+        return message.replace("%prefix%", prefix);
     }
 }

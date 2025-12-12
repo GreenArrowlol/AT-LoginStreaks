@@ -254,7 +254,9 @@ public class RewardManager {
     }
     
     private String processPlaceholders(String text, Player player, int day) {
+        String prefix = plugin.getConfig().getString("prefix", "");
         return text
+                .replace("%prefix%", prefix)
                 .replace("%player%", player.getName())
                 .replace("%days%", String.valueOf(day));
     }

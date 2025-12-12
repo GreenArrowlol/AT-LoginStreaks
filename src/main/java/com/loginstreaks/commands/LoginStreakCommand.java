@@ -12,25 +12,43 @@ import org.bukkit.entity.Player;
 public class LoginStreakCommand implements CommandExecutor {
     
     private final LoginStreakRewards plugin;
+    private final HelpCommand helpCommand;
     
     public LoginStreakCommand(LoginStreakRewards plugin) {
         this.plugin = plugin;
+        this.helpCommand = new HelpCommand(plugin);
     }
     
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.hasPermission("loginstreak.admin")) {
-            sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
-            return true;
-        }
-        
         if (args.length == 0) {
-            sendHelp(sender);
+            helpCommand.sendHelp(sender, 1);
             return true;
         }
         
         switch (args[0].toLowerCase()) {
+            case "help":
+                if (!sender.hasPermission("loginstreak.help")) {
+                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    return true;
+                }
+                int page = 1;
+                if (args.length > 1) {
+                    try {
+                        page = Integer.parseInt(args[1]);
+                    } catch (NumberFormatException e) {
+                        sender.sendMessage(ChatColor.RED + "Invalid page number.");
+                        return true;
+                    }
+                }
+                helpCommand.sendHelp(sender, page);
+                break;
+                
             case "teststreak":
+                if (!sender.hasPermission("loginstreak.admin")) {
+                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    return true;
+                }
                 if (args.length < 3) {
                     sender.sendMessage(ChatColor.RED + "Usage: /loginstreak teststreak <player> <day>");
                     return true;
@@ -39,6 +57,10 @@ public class LoginStreakCommand implements CommandExecutor {
                 break;
                 
             case "reset":
+                if (!sender.hasPermission("loginstreak.admin")) {
+                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    return true;
+                }
                 if (args.length < 2) {
                     sender.sendMessage(ChatColor.RED + "Usage: /loginstreak reset <player>");
                     return true;
@@ -47,6 +69,10 @@ public class LoginStreakCommand implements CommandExecutor {
                 break;
                 
             case "check":
+                if (!sender.hasPermission("loginstreak.admin")) {
+                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    return true;
+                }
                 if (args.length < 2) {
                     sender.sendMessage(ChatColor.RED + "Usage: /loginstreak check <player>");
                     return true;
@@ -55,13 +81,17 @@ public class LoginStreakCommand implements CommandExecutor {
                 break;
                 
             case "reload":
+                if (!sender.hasPermission("loginstreak.admin")) {
+                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    return true;
+                }
                 plugin.reloadConfig();
                 plugin.getRewardManager().reload();
                 sender.sendMessage(ChatColor.GREEN + "Configuration reloaded!");
                 break;
                 
             default:
-                sendHelp(sender);
+                helpCommand.sendHelp(sender, 1);
                 break;
         }
         
@@ -131,13 +161,5 @@ public class LoginStreakCommand implements CommandExecutor {
         } else {
             sender.sendMessage(ChatColor.YELLOW + "Next claim: Available now");
         }
-    }
-    
-    private void sendHelp(CommandSender sender) {
-        sender.sendMessage(ChatColor.GOLD + "=== LoginStreak Commands ===");
-        sender.sendMessage(ChatColor.YELLOW + "/loginstreak teststreak <player> <day>" + ChatColor.GRAY + " - Test rewards for a specific day");
-        sender.sendMessage(ChatColor.YELLOW + "/loginstreak reset <player>" + ChatColor.GRAY + " - Reset player's streak");
-        sender.sendMessage(ChatColor.YELLOW + "/loginstreak check <player>" + ChatColor.GRAY + " - Check player's streak");
-        sender.sendMessage(ChatColor.YELLOW + "/loginstreak reload" + ChatColor.GRAY + " - Reload configuration");
     }
 }

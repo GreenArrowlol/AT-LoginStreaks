@@ -207,26 +207,17 @@ public class RewardManager {
     }
     
     private ItemStack createItem(Reward reward, Player player, int day) {
-        if (reward.getMaterial().equalsIgnoreCase("PLAYER_HEAD") && reward.getSkullTexture() != null) {
-            return XSkull.createItem()
-                    .profile(Profileable.detect(reward.getSkullTexture()))
-                    .apply(meta -> {
-                        if (reward.getName() != null) {
-                            meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', 
-                                processPlaceholders(reward.getName(), player, day)));
-                        }
-                        if (reward.getLore() != null) {
-                            meta.setLore(reward.getLore().stream()
-                                    .map(line -> ChatColor.translateAlternateColorCodes('&', 
-                                        processPlaceholders(line, player, day)))
-                                    .collect(Collectors.toList()));
-                        }
-                    });
-        }
+        ItemStack item = null;
         
-        ItemStack item = XMaterial.matchXMaterial(reward.getMaterial())
-                .map(XMaterial::parseItem)
-                .orElse(null);
+        if (reward.getMaterial().equalsIgnoreCase("PLAYER_HEAD") && reward.getSkullTexture() != null) {
+            item = XSkull.createItem()
+                    .profile(Profileable.detect(reward.getSkullTexture()))
+                    .apply();
+        } else {
+            item = XMaterial.matchXMaterial(reward.getMaterial())
+                    .map(XMaterial::parseItem)
+                    .orElse(null);
+        }
         
         if (item == null) return null;
         

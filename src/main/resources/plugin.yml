@@ -1,18 +1,20 @@
 name: LoginStreakRewards
-version: 1.0.0
+version: '1.0'
 main: com.loginstreaks.LoginStreakRewards
-api-version: '1.20'
-author: zArrowTan
-softdepend: [Vault, PlaceholderAPI]
+api-version: '1.13'
+author: YourName
+description: Reward players for consecutive daily logins
 
 commands:
   loginstreak:
-    description: Login streak admin commands
-    aliases: [lg, streak]
-    permission: loginstreak.admin
-    usage: /loginstreak <teststreak|reset|check> <player> [day]
+    description: Main command for LoginStreakRewards
+    usage: /loginstreak help
+    aliases: [ls, streak]
 
 permissions:
+  loginstreak.help:
+    description: View help menu
+    default: true
   loginstreak.admin:
-    description: Access to admin commands
+    description: Admin commands
     default: op

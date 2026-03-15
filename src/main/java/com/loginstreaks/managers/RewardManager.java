@@ -20,37 +20,43 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class RewardManager {
-    
+
     private final LoginStreakRewards plugin;
     private final List<RewardTier> tiers;
-    
+
     public RewardManager(LoginStreakRewards plugin) {
         this.plugin = plugin;
         this.tiers = new ArrayList<>();
         loadTiers();
     }
-    
+
     private void loadTiers() {
         tiers.clear();
         ConfigurationSection tiersSection = plugin.getConfig().getConfigurationSection("reward-tiers");
         if (tiersSection == null) return;
-        
+
         for (String tierName : tiersSection.getKeys(false)) {
             ConfigurationSection tierSection = tiersSection.getConfigurationSection(tierName);
-            int weight = tierSection.getInt("weight", 0);
+            if (tierSection == null) {
+                continue;
+            }
+
             String permission = tierSection.getString("permission", "");
-            
-            Map<DayRange, List<Reward>> rewards = new HashMap<>();
+            Map<DayRange, List<Reward>> rewards = new LinkedHashMap<>();
             ConfigurationSection daysSection = tierSection.getConfigurationSection("days");
-            
+            DayRange legacyRange = null;
+
             if (daysSection != null) {
                 for (String dayKey : daysSection.getKeys(false)) {
                     ConfigurationSection daySection = daysSection.getConfigurationSection(dayKey);
+                    if (daySection == null) {
+                        continue;
+                    }
+
                     boolean reset = daySection.getBoolean("reset", false);
-                    
                     DayRange range = parseDayRange(dayKey, reset);
                     List<Reward> dayRewards = new ArrayList<>();
-                    
+
                     List<Map<?, ?>> rewardsList = daySection.getMapList("rewards");
                     for (Map<?, ?> rewardMap : rewardsList) {
                         Reward reward = parseReward(rewardMap);
@@ -58,17 +64,81 @@ public class RewardManager {
                             dayRewards.add(reward);
                         }
                     }
-                    
+
                     rewards.put(range, dayRewards);
                 }
+            } else {
+                legacyRange = parseLegacyDayRange(tierSection);
+                if (legacyRange != null) {
+                    List<Reward> dayRewards = parseLegacyRewards(tierSection);
+                    rewards.put(legacyRange, dayRewards);
+                }
             }
-            
+
+            int fallbackWeight = legacyRange != null ? legacyRange.getStart() : 0;
+            int weight = tierSection.getInt("weight", fallbackWeight);
             tiers.add(new RewardTier(tierName, weight, permission, rewards));
         }
-        
+
         tiers.sort((t1, t2) -> Integer.compare(t2.getWeight(), t1.getWeight()));
     }
-    
+
+    private DayRange parseLegacyDayRange(ConfigurationSection tierSection) {
+        String dayRange = tierSection.getString("day-range", "").trim();
+        if (dayRange.isEmpty()) {
+            return null;
+        }
+
+        if (dayRange.endsWith("+")) {
+            int start = Integer.parseInt(dayRange.substring(0, dayRange.length() - 1));
+            return new DayRange(start, Integer.MAX_VALUE, false);
+        }
+
+        return parseDayRange(dayRange, false);
+    }
+
+    private List<Reward> parseLegacyRewards(ConfigurationSection tierSection) {
+        List<Reward> rewards = new ArrayList<>();
+
+        String type = tierSection.getString("type", "").toUpperCase(Locale.ROOT);
+        if (!"COMMAND".equals(type)) {
+            return rewards;
+        }
+
+        List<String> commands = tierSection.getStringList("commands");
+        for (String command : commands) {
+            rewards.add(createTextReward(RewardType.CONSOLE_COMMAND, command));
+        }
+
+        String message = tierSection.getString("message", "");
+        if (!message.isEmpty()) {
+            rewards.add(createTextReward(RewardType.MESSAGE, message));
+        }
+
+        String broadcastMessage = tierSection.getString("broadcast-message", "");
+        if (tierSection.getBoolean("broadcast", false) && !broadcastMessage.isEmpty()) {
+            rewards.add(createTextReward(RewardType.CONSOLE_COMMAND, "broadcast " + broadcastMessage));
+        }
+
+        return rewards;
+    }
+
+    private List<Reward> parseSimpleDayRewards(ConfigurationSection rewardsSection, int day) {
+        ConfigurationSection daySection = rewardsSection.getConfigurationSection("day-" + day);
+        if (daySection == null) {
+            return Collections.emptyList();
+        }
+
+        return parseLegacyRewards(daySection);
+    }
+
+    private Reward createTextReward(RewardType type, String value) {
+        Reward reward = new Reward();
+        reward.setType(type);
+        reward.setValue(value);
+        return reward;
+    }
+
     private DayRange parseDayRange(String key, boolean reset) {
         if (key.contains("-")) {
             String[] parts = key.split("-");
@@ -80,13 +150,13 @@ public class RewardManager {
             return new DayRange(day, day, reset);
         }
     }
-    
+
     private Reward parseReward(Map<?, ?> map) {
         try {
             RewardType type = RewardType.valueOf(((String) map.get("type")).toUpperCase());
             Reward reward = new Reward();
             reward.setType(type);
-            
+
             if (type == RewardType.ITEM) {
                 reward.setMaterial((String) map.get("material"));
                 reward.setAmount(map.containsKey("amount") ? (int) map.get("amount") : 1);
@@ -97,74 +167,81 @@ public class RewardManager {
             } else {
                 reward.setValue((String) map.get("value"));
             }
-            
+
             return reward;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
         }
     }
-    
+
     public void giveRewards(Player player, int day) {
         RewardTier tier = getPlayerTier(player);
-        if (tier == null) return;
-        
-        List<Reward> rewards = getRewardsForDay(tier, day, player);
-        
+        List<Reward> rewards = tier != null ? getRewardsForDay(tier, day) : Collections.emptyList();
+
+        ConfigurationSection rewardsSection = plugin.getConfig().getConfigurationSection("rewards");
+        if (rewardsSection != null) {
+            rewards = new ArrayList<>(rewards);
+            rewards.addAll(parseSimpleDayRewards(rewardsSection, day));
+        }
+
         for (Reward reward : rewards) {
             giveReward(player, reward, day);
         }
     }
-    
-    private List<Reward> getRewardsForDay(RewardTier tier, int day, Player player) {
-        DayRange matchingRange = null;
-        for (DayRange range : tier.getRewards().keySet()) {
-            if (range.contains(day)) {
-                matchingRange = range;
-                break;
-            }
+
+    private List<Reward> getRewardsForDay(RewardTier tier, int day) {
+        List<Reward> tierRewards = findRewardsForDay(tier, day);
+        if (!tierRewards.isEmpty()) {
+            return tierRewards;
         }
-        
-        if (matchingRange != null) {
-            return tier.getRewards().get(matchingRange);
-        }
-        
+
         for (RewardTier fallbackTier : tiers) {
             if (fallbackTier.getWeight() < tier.getWeight()) {
-                for (DayRange range : fallbackTier.getRewards().keySet()) {
-                    if (range.contains(day)) {
-                        return fallbackTier.getRewards().get(range);
-                    }
+                List<Reward> fallbackRewards = findRewardsForDay(fallbackTier, day);
+                if (!fallbackRewards.isEmpty()) {
+                    return fallbackRewards;
                 }
             }
         }
-        
-        return new ArrayList<>();
+
+        return Collections.emptyList();
     }
-    
+
+    private List<Reward> findRewardsForDay(RewardTier tier, int day) {
+        DayRange range = findMatchingRange(tier, day);
+        return range != null ? tier.getRewards().getOrDefault(range, Collections.emptyList()) : Collections.emptyList();
+    }
+
+    private DayRange findMatchingRange(RewardTier tier, int day) {
+        return tier.getRewards().keySet().stream()
+                .filter(range -> range.contains(day))
+                .min(Comparator.comparingInt(DayRange::getStart)
+                        .thenComparingInt(range -> range.getEnd() - range.getStart()))
+                .orElse(null);
+    }
+
     public boolean shouldReset(Player player, int day) {
         RewardTier tier = getPlayerTier(player);
         if (tier == null) return false;
-        
-        for (DayRange range : tier.getRewards().keySet()) {
-            if (range.contains(day) && range.isReset()) {
-                return true;
-            }
+
+        DayRange tierRange = findMatchingRange(tier, day);
+        if (tierRange != null && tierRange.isReset()) {
+            return true;
         }
-        
+
         for (RewardTier fallbackTier : tiers) {
             if (fallbackTier.getWeight() < tier.getWeight()) {
-                for (DayRange range : fallbackTier.getRewards().keySet()) {
-                    if (range.contains(day) && range.isReset()) {
-                        return true;
-                    }
+                DayRange fallbackRange = findMatchingRange(fallbackTier, day);
+                if (fallbackRange != null && fallbackRange.isReset()) {
+                    return true;
                 }
             }
         }
-        
+
         return false;
     }
-    
+
     private RewardTier getPlayerTier(Player player) {
         for (RewardTier tier : tiers) {
             if (tier.getPermission().isEmpty() || player.hasPermission(tier.getPermission())) {
@@ -173,30 +250,30 @@ public class RewardManager {
         }
         return tiers.isEmpty() ? null : tiers.get(tiers.size() - 1);
     }
-    
+
     private void giveReward(Player player, Reward reward, int day) {
         String processed = processPlaceholders(reward.getValue() != null ? reward.getValue() : "", player, day);
-        
+
         switch (reward.getType()) {
             case MESSAGE:
                 player.sendMessage(ChatColor.translateAlternateColorCodes('&', processed));
                 break;
-                
+
             case CONSOLE_COMMAND:
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), processed);
                 break;
-                
+
             case PLAYER_COMMAND:
                 player.performCommand(processed);
                 break;
-                
+
             case VAULT_MONEY:
                 if (plugin.isVaultEnabled() && plugin.getEconomy() != null) {
                     double amount = Double.parseDouble(processed);
                     plugin.getEconomy().depositPlayer(player, amount);
                 }
                 break;
-                
+
             case ITEM:
                 ItemStack item = createItem(reward, player, day);
                 if (item != null) {
@@ -205,10 +282,10 @@ public class RewardManager {
                 break;
         }
     }
-    
+
     private ItemStack createItem(Reward reward, Player player, int day) {
-        ItemStack item = null;
-        
+        ItemStack item;
+
         if (reward.getMaterial().equalsIgnoreCase("PLAYER_HEAD") && reward.getSkullTexture() != null) {
             item = XSkull.createItem()
                     .profile(Profileable.detect(reward.getSkullTexture()))
@@ -218,41 +295,41 @@ public class RewardManager {
                     .map(XMaterial::parseItem)
                     .orElse(null);
         }
-        
+
         if (item == null) return null;
-        
+
         item.setAmount(reward.getAmount());
         ItemMeta meta = item.getItemMeta();
-        
+
         if (meta != null) {
             if (reward.getName() != null) {
-                meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', 
-                    processPlaceholders(reward.getName(), player, day)));
+                meta.setDisplayName(ChatColor.translateAlternateColorCodes('&',
+                        processPlaceholders(reward.getName(), player, day)));
             }
-            
+
             if (reward.getLore() != null) {
                 meta.setLore(reward.getLore().stream()
-                        .map(line -> ChatColor.translateAlternateColorCodes('&', 
-                            processPlaceholders(line, player, day)))
+                        .map(line -> ChatColor.translateAlternateColorCodes('&',
+                                processPlaceholders(line, player, day)))
                         .collect(Collectors.toList()));
             }
-            
+
             if (reward.getEnchantments() != null) {
                 for (String enchantStr : reward.getEnchantments()) {
                     String[] parts = enchantStr.split(":");
                     int level = parts.length > 1 ? Integer.parseInt(parts[1]) : 1;
-                    
-                    XEnchantment.matchXEnchantment(parts[0]).ifPresent(e -> 
-                        meta.addEnchant(e.getEnchant(), level, true));
+
+                    XEnchantment.matchXEnchantment(parts[0]).ifPresent(e ->
+                            meta.addEnchant(e.getEnchant(), level, true));
                 }
             }
-            
+
             item.setItemMeta(meta);
         }
-        
+
         return item;
     }
-    
+
     private String processPlaceholders(String text, Player player, int day) {
         String prefix = plugin.getConfig().getString("prefix", "");
         return text
@@ -260,7 +337,7 @@ public class RewardManager {
                 .replace("%player%", player.getName())
                 .replace("%days%", String.valueOf(day));
     }
-    
+
     public void reload() {
         loadTiers();
     }

@@ -37,20 +37,27 @@ public class RewardManager {
         
         for (String tierName : tiersSection.getKeys(false)) {
             ConfigurationSection tierSection = tiersSection.getConfigurationSection(tierName);
+            if (tierSection == null) {
+                continue;
+            }
+
             int weight = tierSection.getInt("weight", 0);
             String permission = tierSection.getString("permission", "");
-            
-            Map<DayRange, List<Reward>> rewards = new HashMap<>();
+
+            Map<DayRange, List<Reward>> rewards = new LinkedHashMap<>();
             ConfigurationSection daysSection = tierSection.getConfigurationSection("days");
-            
+
             if (daysSection != null) {
                 for (String dayKey : daysSection.getKeys(false)) {
                     ConfigurationSection daySection = daysSection.getConfigurationSection(dayKey);
+                    if (daySection == null) {
+                        continue;
+                    }
+
                     boolean reset = daySection.getBoolean("reset", false);
-                    
                     DayRange range = parseDayRange(dayKey, reset);
                     List<Reward> dayRewards = new ArrayList<>();
-                    
+
                     List<Map<?, ?>> rewardsList = daySection.getMapList("rewards");
                     for (Map<?, ?> rewardMap : rewardsList) {
                         Reward reward = parseReward(rewardMap);
@@ -58,17 +65,73 @@ public class RewardManager {
                             dayRewards.add(reward);
                         }
                     }
-                    
+
+                    rewards.put(range, dayRewards);
+                }
+            } else {
+                DayRange range = parseLegacyDayRange(tierSection);
+                if (range != null) {
+                    List<Reward> dayRewards = parseLegacyRewards(tierSection);
                     rewards.put(range, dayRewards);
                 }
             }
-            
+
             tiers.add(new RewardTier(tierName, weight, permission, rewards));
         }
         
         tiers.sort((t1, t2) -> Integer.compare(t2.getWeight(), t1.getWeight()));
     }
     
+
+    private DayRange parseLegacyDayRange(ConfigurationSection tierSection) {
+        String dayRange = tierSection.getString("day-range", "").trim();
+        if (dayRange.isEmpty()) {
+            return null;
+        }
+
+        if (dayRange.endsWith("+")) {
+            int start = Integer.parseInt(dayRange.substring(0, dayRange.length() - 1));
+            return new DayRange(start, Integer.MAX_VALUE, false);
+        }
+
+        return parseDayRange(dayRange, false);
+    }
+
+    private List<Reward> parseLegacyRewards(ConfigurationSection tierSection) {
+        List<Reward> rewards = new ArrayList<>();
+
+        String type = tierSection.getString("type", "").toUpperCase(Locale.ROOT);
+        if (!"COMMAND".equals(type)) {
+            return rewards;
+        }
+
+        List<String> commands = tierSection.getStringList("commands");
+        for (String command : commands) {
+            Reward reward = new Reward();
+            reward.setType(RewardType.CONSOLE_COMMAND);
+            reward.setValue(command);
+            rewards.add(reward);
+        }
+
+        String message = tierSection.getString("message", "");
+        if (!message.isEmpty()) {
+            Reward reward = new Reward();
+            reward.setType(RewardType.MESSAGE);
+            reward.setValue(message);
+            rewards.add(reward);
+        }
+
+        String broadcastMessage = tierSection.getString("broadcast-message", "");
+        if (tierSection.getBoolean("broadcast", false) && !broadcastMessage.isEmpty()) {
+            Reward reward = new Reward();
+            reward.setType(RewardType.CONSOLE_COMMAND);
+            reward.setValue("broadcast " + broadcastMessage);
+            rewards.add(reward);
+        }
+
+        return rewards;
+    }
+
     private DayRange parseDayRange(String key, boolean reset) {
         if (key.contains("-")) {
             String[] parts = key.split("-");
@@ -109,59 +172,63 @@ public class RewardManager {
         RewardTier tier = getPlayerTier(player);
         if (tier == null) return;
         
-        List<Reward> rewards = getRewardsForDay(tier, day, player);
+        List<Reward> rewards = getRewardsForDay(tier, day);
         
         for (Reward reward : rewards) {
             giveReward(player, reward, day);
         }
     }
     
-    private List<Reward> getRewardsForDay(RewardTier tier, int day, Player player) {
-        DayRange matchingRange = null;
-        for (DayRange range : tier.getRewards().keySet()) {
-            if (range.contains(day)) {
-                matchingRange = range;
-                break;
-            }
+    private List<Reward> getRewardsForDay(RewardTier tier, int day) {
+        List<Reward> tierRewards = findRewardsForDay(tier, day);
+        if (!tierRewards.isEmpty()) {
+            return tierRewards;
         }
-        
-        if (matchingRange != null) {
-            return tier.getRewards().get(matchingRange);
-        }
-        
+
         for (RewardTier fallbackTier : tiers) {
             if (fallbackTier.getWeight() < tier.getWeight()) {
-                for (DayRange range : fallbackTier.getRewards().keySet()) {
-                    if (range.contains(day)) {
-                        return fallbackTier.getRewards().get(range);
-                    }
+                List<Reward> fallbackRewards = findRewardsForDay(fallbackTier, day);
+                if (!fallbackRewards.isEmpty()) {
+                    return fallbackRewards;
                 }
             }
         }
-        
+
         return new ArrayList<>();
     }
     
+
+    private List<Reward> findRewardsForDay(RewardTier tier, int day) {
+        DayRange range = findMatchingRange(tier, day);
+        return range != null ? tier.getRewards().getOrDefault(range, Collections.emptyList()) : Collections.emptyList();
+    }
+
+    private DayRange findMatchingRange(RewardTier tier, int day) {
+        return tier.getRewards().keySet().stream()
+                .filter(range -> range.contains(day))
+                .min(Comparator.comparingInt(DayRange::getStart)
+                        .thenComparingInt(range -> range.getEnd() - range.getStart()))
+                .orElse(null);
+    }
+
     public boolean shouldReset(Player player, int day) {
         RewardTier tier = getPlayerTier(player);
         if (tier == null) return false;
         
-        for (DayRange range : tier.getRewards().keySet()) {
-            if (range.contains(day) && range.isReset()) {
-                return true;
-            }
+        DayRange tierRange = findMatchingRange(tier, day);
+        if (tierRange != null && tierRange.isReset()) {
+            return true;
         }
-        
+
         for (RewardTier fallbackTier : tiers) {
             if (fallbackTier.getWeight() < tier.getWeight()) {
-                for (DayRange range : fallbackTier.getRewards().keySet()) {
-                    if (range.contains(day) && range.isReset()) {
-                        return true;
-                    }
+                DayRange fallbackRange = findMatchingRange(fallbackTier, day);
+                if (fallbackRange != null && fallbackRange.isReset()) {
+                    return true;
                 }
             }
         }
-        
+
         return false;
     }
     

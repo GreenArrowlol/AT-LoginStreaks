@@ -22,7 +22,8 @@ public class PlayerJoinListener implements Listener {
         PlayerData data = plugin.getDataManager().getPlayerData(player.getUniqueId());
         
         long now = System.currentTimeMillis();
-        long checkInterval = plugin.getConfig().getLong("check-interval-hours", 24) * 60 * 60 * 1000;
+        long checkInterval = plugin.getConfig().getLong("claim-interval-hours",
+                plugin.getConfig().getLong("check-interval-hours", 24)) * 60L * 60L * 1000L;
         
         if (data.getNextClaimTime() == 0) {
             handleFirstJoin(player, data, now, checkInterval);
